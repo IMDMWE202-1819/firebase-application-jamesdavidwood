@@ -1,11 +1,12 @@
 package com.jamesdavidwood.mwdassignment2
 
 import android.location.Location
+import android.net.Uri
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
+import android.util.Log
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
-
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
@@ -22,6 +23,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     val db = FirebaseFirestore.getInstance()
     val dbref = FirebaseStorage.getInstance().reference
 
+    private var imageToUpload:Uri? = null
+    private var imageDownload:String? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_maps)
@@ -31,30 +35,22 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         mapFragment.getMapAsync(this)
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
     }
-
-    /**
-     * Manipulates the map once available.
-     * This callback is triggered when the map is ready to be used.
-     * This is where we can add markers or lines, add listeners or move the camera. In this case,
-     * we just add a marker near Sydney, Australia.
-     * If Google Play services is not installed on the device, the user will be prompted to install
-     * it inside the SupportMapFragment. This method will only be triggered once the user has
-     * installed Google Play services and returned to the app.
-     */
+    
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
 
-        // Add a marker in Sydney and move the camera
+        // Add a marker in current location and move the camera
         try {
             fusedLocationClient.lastLocation.addOnSuccessListener{location: Location ->
-                val sydney = LatLng(location.latitude, location.longitude)
+                val currentlocation = LatLng(location.latitude, location.longitude)
                 val geoPoint = GeoPoint(location.latitude, location.longitude)
-                mMap.addMarker(MarkerOptions().position(sydney))
-                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(sydney, 12.0f))
+                mMap.addMarker(MarkerOptions().position(currentlocation))
+                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentlocation, 12.0f))
             }
 
         }
         catch (ex:SecurityException) {
+            Log.w("Location Error", "Security Error", ex)
 
         }
 
