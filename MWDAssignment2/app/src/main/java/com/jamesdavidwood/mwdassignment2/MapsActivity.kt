@@ -3,7 +3,10 @@ package com.jamesdavidwood.mwdassignment2
 import android.net.Uri
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
+import android.support.v7.app.AlertDialog
 import android.util.Log
+import android.widget.ImageView
+import android.widget.TextView
 import android.widget.Toast
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
@@ -12,10 +15,17 @@ import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.GeoPoint
 import com.google.firebase.storage.FirebaseStorage
+import com.squareup.picasso.Picasso
+import kotlinx.android.synthetic.main.activity_upload.*
+import kotlinx.android.synthetic.main.activity_upload.view.*
+import kotlinx.android.synthetic.main.marker_view.*
+import kotlinx.android.synthetic.main.marker_view.view.*
 
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
@@ -27,6 +37,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private var imageToUpload: Uri? = null
     private var imageDownload:String? = null
+    private val MarkerMap = hashMapOf<String, String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,9 +58,52 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
         Toast.makeText(this, "Hi there! For the best experience enable location services. ", Toast.LENGTH_LONG).show()
-        // Add a marker in Ipswich and move the camera to location of device.
-        val ipswich = LatLng(52.0525, 1.1635)
-        mMap.addMarker(MarkerOptions().position(ipswich).title("Marker at University of Suffolk"))
+        mMap.setOnMarkerClickListener { marker ->
+            val id : String = MarkerMap [marker.id] as String
+            db.collection("events")
+                .document(id)
+                .get()
+                .addOnCompleteListener { task ->
+                    val document = task.result
+                    if (document != null) {
+                        val eventName = document.get("title") as String
+                        val eventDesc = document.get("description") as String
+                        val eventPhoto = document.get("image_url") as String?
+                        val dialogView = layoutInflater.inflate(R.layout.marker_view, null)
+                        val MarkerNameView =
+                            dialogView.findViewById<TextView>(R.id.MarkerNameView)
+                        MarkerNameView.text = eventName
+                        val MarkerDescView =
+                            dialogView.findViewById<TextView>(R.id.MarkerDescView)
+                        MarkerDescView.text = eventDesc
+                        val MarkerImageView =
+                            dialogView.findViewById<ImageView>(R.id.MarkerImageView)
+                        Picasso.get().load(eventImage).into(MarkerImageView)
+                        val builder = AlertDialog.Builder(this)
+                        builder.setView(dialogView).setPositiveButton("OK") { dialog, _ ->
+
+                            dialog.dismiss()
+                        }.create().show()
+                    }
+                }
+            false
+        }
+
+        db.collection("events")
+            .get()
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    val result = task.result
+                    if ( result != null) {
+                        val documents = result.documents
+                        for (document in documents) {
+                            val location = document.get("location") as GeoPoint
+                            val marker = mMap.addMarker(MarkerOptions().position(LatLng(location.latitude, location.longitude)))
+                            MarkerMap[marker.id] = document.id
+                        }
+                    }
+                }
+            }
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
@@ -73,3 +127,5 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         }
     }
 }
+
+
