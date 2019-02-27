@@ -1,10 +1,12 @@
 package com.jamesdavidwood.mwdassignment2
 
+import android.content.Intent
 import android.net.Uri
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
 import android.support.v7.app.AlertDialog
 import android.util.Log
+import android.widget.CalendarView
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
@@ -22,10 +24,15 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.GeoPoint
 import com.google.firebase.storage.FirebaseStorage
 import com.squareup.picasso.Picasso
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.android.synthetic.main.activity_upload.*
 import kotlinx.android.synthetic.main.activity_upload.view.*
 import kotlinx.android.synthetic.main.marker_view.*
 import kotlinx.android.synthetic.main.marker_view.view.*
+import java.util.*
+import kotlin.math.log
 
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
@@ -36,7 +43,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     val storageRef = FirebaseStorage.getInstance().reference
 
     private var imageToUpload: Uri? = null
-    private var imageDownload:String? = null
+    private var imageDownload: String? = null
     private val MarkerMap = hashMapOf<String, String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,7 +66,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         mMap = googleMap
         Toast.makeText(this, "Hi there! For the best experience enable location services. ", Toast.LENGTH_LONG).show()
         mMap.setOnMarkerClickListener { marker ->
-            val id : String = MarkerMap [marker.id] as String
+            val id: String = MarkerMap[marker.id] as String
             db.collection("events")
                 .document(id)
                 .get()
@@ -78,7 +85,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                         MarkerDescView.text = eventDesc
                         val MarkerImageView =
                             dialogView.findViewById<ImageView>(R.id.MarkerImageView)
-                        Picasso.get().load(eventImage).into(MarkerImageView)
+                        try {
+                            if (eventPhoto != null && !eventPhoto.isEmpty()) {
+                                Picasso.get().load(eventPhoto).into(MarkerImageView)
+                            }
+                        } catch (e: Exception) {
+                            println("Caught Picasso Exception - URL could be malformed")
+                            println(MarkerImageView)
+                        }
                         val builder = AlertDialog.Builder(this)
                         builder.setView(dialogView).setPositiveButton("OK") { dialog, _ ->
 
@@ -94,16 +108,18 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             .addOnCompleteListener { task ->
                 if (task.isSuccessful) {
                     val result = task.result
-                    if ( result != null) {
+                    if (result != null) {
                         val documents = result.documents
                         for (document in documents) {
                             val location = document.get("location") as GeoPoint
-                            val marker = mMap.addMarker(MarkerOptions().position(LatLng(location.latitude, location.longitude)))
+                            val marker =
+                                mMap.addMarker(MarkerOptions().position(LatLng(location.latitude, location.longitude)))
                             MarkerMap[marker.id] = document.id
                         }
                     }
                 }
             }
+
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
@@ -125,7 +141,48 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         } catch (ex: SecurityException) {
             Log.w("GEO", "security error", ex)
         }
-    }
-}
 
+        val PICK_IMAGE = 1234
+
+        override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+            if (requestCode == PICK_IMAGE) {
+                if (data != null) {
+                    imageToUpload = data.data
+                }
+            }
+            super.onActivityResult(requestCode, resultCode, data)
+        }
+
+        private suspend fun uploadImage() {
+            GlobalScope.async {
+                if (imageToUpload != null) {
+                    val imageUri = imageToUpload
+                    val email = mAuth.currentUser!!.email
+                    val currentDate = Calendar.getInstance().time
+                    val imageRef = storageRef.child("$email/$currentDate.png")
+                    if (imageUri != null) {
+                        val task = imageRef.putFile(imageUri)
+
+                        while (task.isInProgress) {
+                            delay(10)
+                        }
+                        if (task.isSuccessful) {
+                            val meta = task.snapshot.metadata
+                            val uploadRef = meta?.reference
+                            if (uploadRef != null) {
+                                val downloadUrl = uploadRef.downloadUrl
+                                while (!downloadUrl.isComplete) {
+                                    delay(10)
+                                }
+                                if (downloadUrl.isSuccessful) {
+                                    imageDownload = downloadUrl.result.toString()
+                                }
+                            }
+                        }
+                    }
+                }
+            }.await()
+        }
+    }
+    fun onFabClicked (view)
 
