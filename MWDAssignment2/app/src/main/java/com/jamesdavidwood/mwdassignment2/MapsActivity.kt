@@ -1,15 +1,15 @@
 package com.jamesdavidwood.mwdassignment2
 
 import android.content.Intent
+import android.location.Location
 import android.net.Uri
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
 import android.support.v7.app.AlertDialog
 import android.util.Log
-import android.widget.CalendarView
-import android.widget.ImageView
-import android.widget.TextView
-import android.widget.Toast
+import android.view.LayoutInflater
+import android.view.View
+import android.widget.*
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -24,6 +24,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.GeoPoint
 import com.google.firebase.storage.FirebaseStorage
 import com.squareup.picasso.Picasso
+import kotlinx.android.synthetic.main.activity_maps.*
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -31,6 +32,7 @@ import kotlinx.android.synthetic.main.activity_upload.*
 import kotlinx.android.synthetic.main.activity_upload.view.*
 import kotlinx.android.synthetic.main.marker_view.*
 import kotlinx.android.synthetic.main.marker_view.view.*
+import kotlinx.coroutines.runBlocking
 import java.util.*
 import kotlin.math.log
 
@@ -44,7 +46,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private var imageToUpload: Uri? = null
     private var imageDownload: String? = null
-    private val MarkerMap = hashMapOf<String, String>()
+    private val markerMap = hashMapOf<String, String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,7 +68,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         mMap = googleMap
         Toast.makeText(this, "Hi there! For the best experience enable location services. ", Toast.LENGTH_LONG).show()
         mMap.setOnMarkerClickListener { marker ->
-            val id: String = MarkerMap[marker.id] as String
+            val id: String = markerMap[marker.id] as String
             db.collection("events")
                 .document(id)
                 .get()
@@ -114,7 +116,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                             val location = document.get("location") as GeoPoint
                             val marker =
                                 mMap.addMarker(MarkerOptions().position(LatLng(location.latitude, location.longitude)))
-                            MarkerMap[marker.id] = document.id
+                            markerMap[marker.id] = document.id
                         }
                     }
                 }
@@ -141,8 +143,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         } catch (ex: SecurityException) {
             Log.w("GEO", "security error", ex)
         }
+    }
 
-        val PICK_IMAGE = 1234
+
+        private val PICK_IMAGE = 1234
 
         override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
             if (requestCode == PICK_IMAGE) {
@@ -183,6 +187,87 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 }
             }.await()
         }
+
+    fun onFabClicked(view: View) {
+
+        val dialogView = layoutInflater.inflate(R.layout.activity_upload, null)
+        val uploadButton = dialogView.findViewById<Button>(R.id.UploadButton)
+
+        uploadButton.setOnClickListener {
+            val intent = Intent()
+            intent.type = "image/*"
+            intent.action = Intent.ACTION_GET_CONTENT
+            startActivityForResult(Intent.createChooser(intent, "Select Image"), PICK_IMAGE)
+        }
+        val builder = AlertDialog.Builder(this)
+        builder.setView(dialogView)
+            .setPositiveButton("Upload")
+            { dialog, _ ->
+                val titleText = dialogView.findViewById<TextView>(R.id.EventName)
+                val descText = dialogView.findViewById<TextView>(R.id.EventDesc)
+
+                val event = hashMapOf<String, Any?>()
+                event["title"] = titleText.text.toString()
+                event["description"] = descText.text.toString()
+                event["user"] = mAuth.currentUser?.email
+
+                fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+
+                Log.d("GEO", "Before the last location on complete task")
+
+                try {
+                    Log.d("GEO", "In the Last Location Try Block")
+                    fusedLocationClient.lastLocation.addOnCompleteListener {
+                        Log.d("GEO", "In the Last Location On Complete Task")
+                        if (it.isSuccessful) {
+                            val location = it.result
+
+                            if (location != null) {
+                                val currentLocation = GeoPoint(location.latitude, location.longitude)
+                                event["location"] = currentLocation
+
+                                runBlocking {
+                                    uploadImage()
+                                }
+                                event["image_url"] = imageDownload
+
+                                db.collection("events").add(event).addOnCompleteListener { task ->
+                                    if (task.isSuccessful) {
+                                        val taskId = task.result!!.id
+                                        val marker = mMap.addMarker(
+                                            MarkerOptions().position(
+                                                LatLng(
+                                                    location.latitude,
+                                                    location.longitude
+                                                )
+                                            )
+                                        )
+                                        markerMap[marker.id] = taskId
+                                    }
+                                }
+                            }
+                        } else
+                        {
+                            Log.d("GEO", "failed to receive the last known location", it.exception)
+                        }
+                    }
+                }
+                catch (ex:SecurityException) {
+                    Log.w("GEO", "security error", ex)
+                }
+                catch (ex:Exception) {
+                    Log.w("APP", "general error", ex)
+                }
+
+
+            }
+            .setNegativeButton("Cancel"
+            ) { dialog, _ ->
+                dialog.cancel()
+            }
+        builder.create().show()
+            }
     }
-    fun onFabClicked (view)
+
+
 
