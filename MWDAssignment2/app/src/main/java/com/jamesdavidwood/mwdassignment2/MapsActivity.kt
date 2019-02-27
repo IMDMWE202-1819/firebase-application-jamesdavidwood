@@ -66,6 +66,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
      */
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
+        // pops up a message to the user to let them know that a better experience is available
         Toast.makeText(this, "Hi there! For the best experience enable location services. ", Toast.LENGTH_LONG).show()
         mMap.setOnMarkerClickListener { marker ->
             val id: String = markerMap[marker.id] as String
@@ -75,26 +76,29 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 .addOnCompleteListener { task ->
                     val document = task.result
                     if (document != null) {
-                        val eventName = document.get("title") as String
-                        val eventDesc = document.get("description") as String
-                        val eventPhoto = document.get("image_url") as String?
+                        val dbeventName = document.get("title") as String
+                        val dbeventDesc = document.get("desc") as String
+                        val dbeventPhoto = document.get("image_url") as String?
                         val dialogView = layoutInflater.inflate(R.layout.marker_view, null)
                         val MarkerNameView =
                             dialogView.findViewById<TextView>(R.id.MarkerNameView)
-                        MarkerNameView.text = eventName
+                        MarkerNameView.text = dbeventName
                         val MarkerDescView =
                             dialogView.findViewById<TextView>(R.id.MarkerDescView)
-                        MarkerDescView.text = eventDesc
+                        MarkerDescView.text = dbeventDesc
                         val MarkerImageView =
                             dialogView.findViewById<ImageView>(R.id.MarkerImageView)
+                        // to make sure that errors are handles by checking if the string is empty
                         try {
-                            if (eventPhoto != null && !eventPhoto.isEmpty()) {
-                                Picasso.get().load(eventPhoto).into(MarkerImageView)
+                            if (dbeventPhoto != null && !dbeventPhoto.isEmpty()) {
+                                Picasso.get().load(dbeventPhoto).into(MarkerImageView)
                             }
+                            // by catching that exception enables the app to not crash
                         } catch (e: Exception) {
                             println("Caught Picasso Exception - URL could be malformed")
                             println(MarkerImageView)
                         }
+                        // building a dialog to enable to the user to click on the marker to view more info on marker
                         val builder = AlertDialog.Builder(this)
                         builder.setView(dialogView).setPositiveButton("OK") { dialog, _ ->
 
@@ -105,6 +109,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             false
         }
 
+        // accessing the Firebase Collection to see what are events are in the collection so that these can be displayed
+        // on the map.
         db.collection("events")
             .get()
             .addOnCompleteListener { task ->
@@ -131,10 +137,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     val location = it.result
 
                     if (location != null) {
+                        // moving the camera to your current location
                         mMap.moveCamera(
                             CameraUpdateFactory.newLatLngZoom(
                                 LatLng(location.latitude, location.longitude),
-                                17.0f
+                                15.0f
                             )
                         )
                     }
@@ -145,7 +152,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         }
     }
 
-
+        // declared later and used for the upload photo button
         private val PICK_IMAGE = 1234
 
         override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -208,7 +215,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
                 val event = hashMapOf<String, Any?>()
                 event["title"] = titleText.text.toString()
-                event["description"] = descText.text.toString()
+                event["desc"] = descText.text.toString()
                 event["user"] = mAuth.currentUser?.email
 
                 fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
